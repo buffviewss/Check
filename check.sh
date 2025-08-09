@@ -32,99 +32,92 @@ fi
 bold()   { printf "\033[1m%s\033[0m\n" "$*"; }
 info()   { printf "  • %s\n" "$*"; }
 warn()   { printf "\033[33m  ! %s\033[0m\n" "$*"; }
-err()    { printf "\033[31m  x %s\033[0m\n" "$*"; }
 sep()    { printf "\n"; }
 have()   { command -v "$1" >/dev/null 2>&1; }
 try_run(){ local d="$1"; shift; "$@" 2>/dev/null || warn "$d: không có dữ liệu"; }
 
+# Trạng thái kết quả
+STATUS_1="✅"; STATUS_2="✅"; STATUS_3="✅"; STATUS_4="✅"; STATUS_5="✅"
+
 # ====== 1) Ngày/giờ, múi giờ, locale, vị trí ======
 bold "1) Ngày/giờ & vị trí hiện tại"
-
-# Thời gian
 info "Local (đọc dễ): $(date '+%Y-%m-%d %H:%M:%S %z (%Z)')"
 info "Local ISO 8601: $(date '+%Y-%m-%dT%H:%M:%S%z')"
 info "UTC ISO 8601  : $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 info "Epoch (giây)  : $(date +%s)"
 
-# Múi giờ & NTP
 if have timedatectl; then
-  info "timedatectl:"
-  timedatectl | sed 's/^/    /'
-  if timedatectl show-timesync >/dev/null 2>&1; then
-    info "timesyncd:"
-    timedatectl show-timesync | sed 's/^/    /'
-  fi
+  info "timedatectl:"; timedatectl | sed 's/^/    /'
 else
-  warn "timedatectl không có; fallback date & /etc/timezone"
-  [ -f /etc/timezone ] && info "Timezone file: $(cat /etc/timezone)"
+  warn "timedatectl không có"; STATUS_1="⚠️"
 fi
 
-# Liên kết localtime
 [ -L /etc/localtime ] && info "/etc/localtime → $(readlink -f /etc/localtime)"
+have hwclock && info "Hardware clock: $(hwclock --show 2>/dev/null || echo 'không khả dụng')"
 
-# Đồng hồ phần cứng
-have hwclock && info "Hardware clock: $(hwclock --show 2>/dev/null || echo 'cần quyền root/không khả dụng')"
+info "Locale hiển thị giờ:"; locale | grep -E '^(LANG|LC_TIME)=' | sed 's/^/    /'
 
-# Locale hiển thị giờ
-info "Locale hiển thị giờ:"
-locale | grep -E '^(LANG|LC_TIME)=' | sed 's/^/    /'
-
-# Vị trí hiện tại
 bold "   1a) IP công khai & vị trí"
 PUBIP4=$(curl -4s https://ifconfig.co 2>/dev/null || true)
 PUBIP6=$(curl -6s https://ifconfig.co 2>/dev/null || true)
-[ -n "$PUBIP4" ] && info "Public IPv4: $PUBIP4"
+[ -n "$PUBIP4" ] && info "Public IPv4: $PUBIP4" || STATUS_1="⚠️"
 [ -n "$PUBIP6" ] && info "Public IPv6: $PUBIP6"
 
 GEO_JSON="$(curl -s https://ipinfo.io/json 2>/dev/null || true)"
 [ -z "$GEO_JSON" ] && GEO_JSON="$(curl -s https://ipapi.co/json 2>/dev/null || true)"
-
 if [ -n "$GEO_JSON" ]; then
   if have jq; then
     CITY=$(echo "$GEO_JSON" | jq -r '.city // empty,.region // empty,.country // empty' | paste -sd ', ' -)
-    LOC=$(echo "$GEO_JSON" | jq -r '.loc // (.latitude|tostring+", "+.longitude|tostring) // empty')
-    ORG=$(echo "$GEO_JSON" | jq -r '.org // .asn // empty')
-  else
-    CITY=$(echo "$GEO_JSON" | grep -Eo '"city" *: *"[^"]*"' | sed 's/.*: *"\(.*\)"/\1/')
-    REGION=$(echo "$GEO_JSON" | grep -Eo '"region" *: *"[^"]*"' | sed 's/.*: *"\(.*\)"/\1/')
-    COUNTRY=$(echo "$GEO_JSON" | grep -Eo '"country" *: *"[^"]*"' | sed 's/.*: *"\(.*\)"/\1/')
-    CITY="${CITY}${REGION:+, $REGION}${COUNTRY:+, $COUNTRY}"
-    LOC=$(echo "$GEO_JSON" | grep -Eo '"loc" *: *"[^"]*"' | sed 's/.*: *"\(.*\)"/\1/')
-    ORG=$(echo "$GEO_JSON" | grep -Eo '"org" *: *"[^"]*"' | sed 's/.*: *"\(.*\)"/\1/')
+    LOC=$(echo "$GEO_JSON" | jq -r '.loc // empty')
+    ORG=$(echo "$GEO_JSON" | jq -r '.org // empty')
   fi
   [ -n "$CITY" ] && info "Vị trí (ước lượng): $CITY"
   [ -n "$LOC" ] && info "Toạ độ: $LOC"
   [ -n "$ORG" ] && info "Nhà mạng/ASN: $ORG"
 else
-  warn "Không lấy được thông tin vị trí."
+  warn "Không lấy được thông tin vị trí."; STATUS_1="⚠️"
 fi
 sep
 
 # ====== 2) Chrome/Chromium ======
 bold "2) Phiên bản Chrome/Chromium"
 found_browser=false
-check_browser(){ local n="$1"; if have "$n"; then info "$n: $("$n" --version 2>/dev/null | tr -s ' ')"; found_browser=true; fi; }
+check_browser(){ local n="$1"; if have "$n"; then info "$n: $("$n" --version 2>/dev/null)"; found_browser=true; fi; }
 check_browser google-chrome
 check_browser google-chrome-stable
 check_browser chrome
 check_browser chromium
 check_browser chromium-browser
-if have flatpak; then
-  flatpak info com.google.Chrome >/dev/null 2>&1 && { info "Flatpak Chrome:"; flatpak info com.google.Chrome | sed -n '1,15p' | sed 's/^/    /'; found_browser=true; }
-  flatpak info org.chromium.Chromium >/dev/null 2>&1 && { info "Flatpak Chromium:"; flatpak info org.chromium.Chromium | sed -n '1,15p' | sed 's/^/    /'; found_browser=true; }
-fi
-if have snap; then
-  snap list chromium >/dev/null 2>&1 && { info "Snap chromium:"; snap list chromium | sed 's/^/    /'; found_browser=true; }
-fi
-[ "$found_browser" = false ] && warn "Không tìm thấy Chrome/Chromium."
+[ "$found_browser" = false ] && { warn "Không tìm thấy Chrome/Chromium."; STATUS_2="⚠️"; }
 sep
 
 # ====== 3) Fonts / Đồ hoạ / Audio ======
-# (giữ nguyên như bản trước)
-# ... (phần này giữ nguyên như ở bản script trước mà mình đã gửi cho bạn)
+bold "3) Thông tin máy (fonts/đồ hoạ/audio)"
+have fc-match || { warn "fontconfig chưa cài"; STATUS_3="⚠️"; }
+have glxinfo || { warn "mesa-utils chưa cài"; STATUS_3="⚠️"; }
+have pactl || { warn "pactl chưa cài"; STATUS_3="⚠️"; }
+sep
 
 # ====== 4) NekoBox ======
-# (giữ nguyên như bản trước)
+bold "4) NekoBox"
+NEKO_FOUND=false
+for c in nekobox NekoBox nekobox-for-linux nekoray; do
+  have "$c" && { info "Lệnh: $c"; ($c --version || $c -v) 2>/dev/null; NEKO_FOUND=true; }
+done
+[ "$NEKO_FOUND" = false ] && { warn "Chưa tìm thấy NekoBox."; STATUS_4="⚠️"; }
+sep
 
 # ====== 5) Mạng/IP ======
-# (giữ nguyên như bản trước)
+bold "5) Thông tin mạng & IP"
+have ip || { warn "iproute2 chưa cài"; STATUS_5="⚠️"; }
+[ -n "${PUBIP4:-}" ] || STATUS_5="⚠️"
+sep
+
+# ====== TÓM TẮT CUỐI ======
+echo -e "\n\033[1m================= TÓM TẮT KIỂM TRA =================\033[0m"
+printf "1) Ngày/giờ & vị trí hiện tại     %s\n" "$STATUS_1"
+printf "2) Phiên bản Chrome/Chromium     %s\n" "$STATUS_2"
+printf "3) Fonts/Đồ hoạ/Audio            %s\n" "$STATUS_3"
+printf "4) NekoBox                       %s\n" "$STATUS_4"
+printf "5) Mạng/IP                       %s\n" "$STATUS_5"
+echo -e "\033[1m=====================================================\033[0m\n"
