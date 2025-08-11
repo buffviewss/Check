@@ -9,7 +9,7 @@ echo "Epoch time : $(date +%s)"
 # Display detailed time settings from systemd
 timedatectl
 
-# Check LANG and LC_TIME
+# Check LANG and LC_TIME variables
 locale | grep -E '^(LANG|LC_TIME)='
 
 # Check all important LC_* variables for UK settings
@@ -17,8 +17,7 @@ locale | grep -E 'LANG=|LC_ALL=|LC_TIME=|LC_NUMERIC=|LC_MONETARY=|LC_MEASUREMENT
 
 echo
 
-
-echo "===== Phiên bản Chrome/Chromium ====="
+echo "===== Chrome/Chromium Version ====="
 if command -v google-chrome >/dev/null 2>&1; then
     google-chrome --version
 elif command -v google-chrome-stable >/dev/null 2>&1; then
@@ -28,16 +27,16 @@ elif command -v chromium >/dev/null 2>&1; then
 elif command -v chromium-browser >/dev/null 2>&1; then
     chromium-browser --version
 else
-    echo "⚠️ Không tìm thấy Chrome/Chromium."
+    echo "⚠️ Chrome/Chromium not found."
 fi
 echo
 
-echo "===== IP hiện tại ====="
-echo "IP nội bộ:"
+echo "===== Current IP Address ====="
+echo "Internal IP:"
 hostname -I
 if command -v curl >/dev/null 2>&1; then
     echo "Public IPv4: $(curl -4s https://ifconfig.co)"
     echo "Public IPv6: $(curl -6s https://ifconfig.co)"
 else
-    echo "⚠️ Thiếu curl để lấy IP công khai."
+    echo "⚠️ curl not installed, cannot retrieve public IP."
 fi
