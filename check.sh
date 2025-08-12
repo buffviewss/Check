@@ -16,7 +16,18 @@ locale | grep -E '^(LANG|LC_TIME)='
 locale | grep -E 'LANG=|LC_ALL=|LC_TIME=|LC_NUMERIC=|LC_MONETARY=|LC_MEASUREMENT=|LC_PAPER='
 
 echo
+echo "===== Full Locale ====="
+locale
 
+echo
+echo "===== localectl status ====="
+if command -v localectl >/dev/null 2>&1; then
+    localectl status
+else
+    echo "⚠️  localectl không có (hệ thống không dùng systemd hoặc gói chưa cài)."
+fi
+
+echo
 echo "===== Chrome/Chromium Version ====="
 if command -v google-chrome >/dev/null 2>&1; then
     google-chrome --version
@@ -29,8 +40,8 @@ elif command -v chromium-browser >/dev/null 2>&1; then
 else
     echo "⚠️ Chrome/Chromium not found."
 fi
-echo
 
+echo
 echo "===== Current IP Address ====="
 echo "Internal IP:"
 hostname -I
